@@ -33,3 +33,47 @@ jobs:
         with:
           name: pytest-report
           path: pytest-report.xml
+
+  docker:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Read the version
+        id: version
+        run: echo "version=$(cat VERSION.txt)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build the image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          load: true
+          tags: |
+            praktikum-llm:ci
+            praktikum-llm:${{ steps.version.outputs.version }}
+          cache-from: type=gha,scope=runtime
+          cache-to: type=gha,scope=runtime,mode=max
+
+      - name: Smoke test the image
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          docker image ls praktikum-llm
+          docker run --rm praktikum-llm:ci --version
+          test "$(docker run --rm praktikum-llm:ci --version)" = "llm $VERSION"
+
+      - name: Build the test image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.test
+          load: true
+          tags: praktikum-llm-tests:ci
+          cache-from: type=gha,scope=tests
+          cache-to: type=gha,scope=tests,mode=max
+
+      - name: Unit tests inside the container
+        run: docker run --rm praktikum-llm-tests:ci
