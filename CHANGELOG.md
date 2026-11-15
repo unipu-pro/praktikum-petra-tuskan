@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.0](https://github.com/unipu-pro/praktikum-petra-tuskan/compare/v0.2.0...v0.3.0) (2026-11-15)
+
+
+### Features
+
+* add Ollama, Open WebUI and tests to Docker Compose ([db27c67](https://github.com/unipu-pro/praktikum-petra-tuskan/commit/db27c67fe836584c3c35903b59d39c41323d6ec0))
+* package the CLI and publish it to TestPyPI ([e185b95](https://github.com/unipu-pro/praktikum-petra-tuskan/commit/e185b95cf1e5c8316a4779c875d9373dc547f3d1))
+* run the CLI with Docker Compose ([9f0495e](https://github.com/unipu-pro/praktikum-petra-tuskan/commit/9f0495edc12851e0fc53447cd5c97435021a7b40))
+
 ## [0.2.0](https://github.com/unipu-pro/praktikum-petra-tuskan/compare/v0.1.0...v0.2.0) (2026-11-04)
 
 
