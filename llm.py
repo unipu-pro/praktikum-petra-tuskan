@@ -5,16 +5,25 @@ import sys
 from pathlib import Path
 
 import ollama_client
+from importlib import metadata
 
 VERSION_FILE = Path(__file__).with_name("VERSION.txt")
 
 
 def read_version() -> str:
-    """Returns the version from VERSION.txt (bumped by release-please), or 0.0.0 when the file is missing."""
-    try:
+    """Returns the tool version.
+
+    1. VERSION.txt next to llm.py: a git checkout or a container image (bumped by release-please).
+    2. The metadata of the installed distribution: after `pip install` from (Test)PyPI,
+       VERSION.txt is not next to the module, but the wheel recorded the version.
+    3. 0.0.0 when neither exists.
+    """
+    if VERSION_FILE.exists():
         return VERSION_FILE.read_text(encoding="utf-8").strip()
-    except FileNotFoundError:
-        return "0.0.0"
+    distributions = metadata.packages_distributions().get("llm")
+    if distributions:
+        return metadata.version(distributions[0])
+    return "0.0.0"
 
 
 def cmd_status(args: argparse.Namespace) -> int:

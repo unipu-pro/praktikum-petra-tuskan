@@ -9,4 +9,6 @@
 pytest.txt
 docker.txt
 storage.txt
-compose.txt
+compose.txtbuild/
+dist/
+*.egg-info/
