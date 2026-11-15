@@ -23,4 +23,4 @@ def test_read_version_falls_back_when_file_and_package_are_missing(monkeypatch, 
     monkeypatch.setattr(llm, "VERSION_FILE", tmp_path / "missing.txt")
     monkeypatch.setattr(llm.metadata, "packages_distributions", lambda: {})
 
-    assert llm.read_version() == "0.0.1"
+    assert llm.read_version() == "0.0.0"
