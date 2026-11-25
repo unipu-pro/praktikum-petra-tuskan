@@ -1,23 +1,30 @@
+# Week 6: continuous integration for praktikum-llm, rewritten from scratch.
+# Runs on every new pull request and on every push into an open pull request:
+#   test-module     unit tests with pytest directly on the runner
+#   test-container  the same tests inside the image built from Dockerfile.test
+#   build-image     builds the runtime image (layers reused from :dev) and pushes it
+#                   as ghcr.io/<org>/praktikum-llm-<login>:<branch name>
 name: ci
 
 on:
   pull_request:
     types:
-      - opened
-      - synchronize
+      - opened        # the PR is created
+      - synchronize   # a new commit is pushed to the PR branch
 
 permissions:
   contents: read
+  packages: write     # GITHUB_TOKEN may push to and read from ghcr.io
 
 jobs:
-  test:
+  test-module:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.13"
+          python-version: "3.13"    # same Python as the image (python:3.13-alpine)
           cache: pip
           cache-dependency-path: requirements*.txt
 
@@ -28,52 +35,66 @@ jobs:
         run: python -m pytest -v --junitxml=pytest-report.xml
 
       - name: Upload the test report
-        if: always()
+        if: always()                # also (especially) when the tests fail
         uses: actions/upload-artifact@v7
         with:
           name: pytest-report
           path: pytest-report.xml
 
-  docker:
-    needs: test
-    runs-on: ubuntu-latest
+  test-container:
+    runs-on: ubuntu-latest          # runs in parallel with test-module
     steps:
       - uses: actions/checkout@v7
 
-      - name: Read the version
-        id: version
-        run: echo "version=$(cat VERSION.txt)" >> "$GITHUB_OUTPUT"
-
       - uses: docker/setup-buildx-action@v4
-
-      - name: Build the image
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          load: true
-          tags: |
-            praktikum-llm:ci
-            praktikum-llm:${{ steps.version.outputs.version }}
-          cache-from: type=gha,scope=runtime
-          cache-to: type=gha,scope=runtime,mode=max
-
-      - name: Smoke test the image
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          docker image ls praktikum-llm
-          docker run --rm praktikum-llm:ci --version
-          test "$(docker run --rm praktikum-llm:ci --version)" = "llm $VERSION"
 
       - name: Build the test image
         uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile.test
-          load: true
+          load: true                # keep the image in the runner's Docker, do not push it
           tags: praktikum-llm-tests:ci
           cache-from: type=gha,scope=tests
           cache-to: type=gha,scope=tests,mode=max
 
       - name: Unit tests inside the container
-        run: docker run --rm praktikum-llm-tests:ci
+        run: docker run --rm praktikum-llm-tests:ci   # exit code of the container = exit code of pytest
+
+  build-image:
+    needs:
+      - test-module
+      - test-container
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Name and tag the image
+        id: image
+        run: |
+          name="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/praktikum-llm-${GITHUB_ACTOR,,}"
+          tag="${GITHUB_HEAD_REF//[^a-zA-Z0-9_.-]/-}"   # feature/ci-cd -> feature-ci-cd
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "ref=$name:$tag" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v4   # before the build: the :dev cache is in the (private) registry
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push the image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.image.outputs.ref }}
+          cache-from: type=registry,ref=${{ steps.image.outputs.name }}:dev   # layers of the last dev image
+
+      - name: Job summary
+        env:
+          IMAGE: ${{ steps.image.outputs.ref }}
+        run: echo "Pushed \`$IMAGE\`" >> "$GITHUB_STEP_SUMMARY"
